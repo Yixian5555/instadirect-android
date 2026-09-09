@@ -62,7 +62,6 @@ class MainActivity : AppCompatActivity() {
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            databaseEnabled = true
             allowFileAccess = true
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             userAgentString = MOBILE_USER_AGENT
@@ -84,7 +83,12 @@ class MainActivity : AppCompatActivity() {
             ): Boolean {
                 filePathCallback?.onReceiveValue(null)
                 filePathCallback = callback
-                fileChooserLauncher.launch(params.createIntent())
+                try {
+                    fileChooserLauncher.launch(params.createIntent())
+                } catch (e: Exception) {
+                    filePathCallback?.onReceiveValue(null)
+                    filePathCallback = null
+                }
                 return true
             }
         }
@@ -94,6 +98,7 @@ class MainActivity : AppCompatActivity() {
                 injectNotificationInterceptor(view)
                 val path = Uri.parse(url).path ?: ""
                 if (path == "/" || path.isEmpty()) {
+                    view.clearHistory()
                     view.loadUrl(INBOX_URL)
                 }
             }
