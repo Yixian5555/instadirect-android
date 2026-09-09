@@ -69,7 +69,7 @@ class MainActivity : AppCompatActivity() {
             builtInZoomControls = false
         }
 
-        webView.addJavascriptInterface(NotificationBridge(this), "AndroidBridge")
+        webView.addJavascriptInterface(NotificationBridge(applicationContext), "AndroidBridge")
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
@@ -164,6 +164,23 @@ class MainActivity : AppCompatActivity() {
                 this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1
             )
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        webView.onResume()
+        webView.resumeTimers()
+    }
+
+    override fun onPause() {
+        webView.pauseTimers()
+        webView.onPause()
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        webView.destroy()
+        super.onDestroy()
     }
 
     inner class NotificationBridge(private val ctx: Context) {
