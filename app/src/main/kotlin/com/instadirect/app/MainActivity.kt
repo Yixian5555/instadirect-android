@@ -52,7 +52,15 @@ class MainActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.canGoBack()) webView.goBack() else finish()
+                if (webView.canGoBack()) {
+                    val history = webView.copyBackForwardList()
+                    val prevUrl = history.getItemAtIndex(history.currentIndex - 1)?.url ?: ""
+                    if (Uri.parse(prevUrl).path?.startsWith("/direct") == true) {
+                        webView.goBack()
+                        return
+                    }
+                }
+                finish()
             }
         })
     }
