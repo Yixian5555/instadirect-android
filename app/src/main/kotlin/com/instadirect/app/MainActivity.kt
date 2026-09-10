@@ -107,6 +107,16 @@ class MainActivity : AppCompatActivity() {
                 return if (isAllowedUrl(request.url.toString())) false
                 else { view.loadUrl(INBOX_URL); true }
             }
+
+            override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+                super.doUpdateVisitedHistory(view, url, isReload)
+                val path = Uri.parse(url).path ?: ""
+                val isDmPage = path.startsWith("/direct") || path.startsWith("/accounts") ||
+                        path.startsWith("/challenge") || path.startsWith("/two_factor") || path == "/"
+                if (!isDmPage) {
+                    view.post { view.loadUrl(INBOX_URL) }
+                }
+            }
         }
     }
 
