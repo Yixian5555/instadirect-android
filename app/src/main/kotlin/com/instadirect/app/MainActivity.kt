@@ -24,6 +24,12 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
@@ -45,6 +51,7 @@ class MainActivity : AppCompatActivity() {
 
         createNotificationChannel()
         requestNotificationPermission()
+        schedulePolling()
 
         webView = findViewById(R.id.webView)
         configureWebView()
@@ -96,6 +103,7 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 injectNotificationInterceptor(view)
+                saveCookies()
                 val path = Uri.parse(url).path ?: ""
                 if (path == "/" || path.isEmpty()) {
                     view.clearHistory()
@@ -153,6 +161,26 @@ class MainActivity : AppCompatActivity() {
                 path.startsWith("/two_factor") ||
                 path.startsWith("/api") ||
                 path == "/"
+    }
+
+    private fun saveCookies() {
+        val cookies = android.webkit.CookieManager.getInstance()
+            .getCookie("https://www.instagram.com") ?: return
+        getSharedPreferences(DmCheckWorker.PREFS, Context.MODE_PRIVATE)
+            .edit().putString(DmCheckWorker.KEY_COOKIES, cookies).apply()
+    }
+
+    private fun schedulePolling() {
+        val request = PeriodicWorkRequestBuilder<DmCheckWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+            )
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "dm_check",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
     }
 
     private fun createNotificationChannel() {
