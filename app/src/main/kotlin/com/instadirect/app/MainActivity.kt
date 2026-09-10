@@ -24,12 +24,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import java.util.concurrent.TimeUnit
+import android.content.Intent
+import android.util.Log
 
 class MainActivity : AppCompatActivity() {
 
@@ -51,7 +47,7 @@ class MainActivity : AppCompatActivity() {
 
         createNotificationChannel()
         requestNotificationPermission()
-        schedulePolling()
+        startPollingService()
 
         webView = findViewById(R.id.webView)
         configureWebView()
@@ -166,30 +162,30 @@ class MainActivity : AppCompatActivity() {
     private fun saveCookies() {
         val cookies = android.webkit.CookieManager.getInstance()
             .getCookie("https://www.instagram.com") ?: return
-        getSharedPreferences(DmCheckWorker.PREFS, Context.MODE_PRIVATE)
-            .edit().putString(DmCheckWorker.KEY_COOKIES, cookies).apply()
+        getSharedPreferences(PollingService.PREFS, Context.MODE_PRIVATE)
+            .edit().putString(PollingService.KEY_COOKIES, cookies).apply()
     }
 
-    private fun schedulePolling() {
-        val request = PeriodicWorkRequestBuilder<DmCheckWorker>(15, TimeUnit.MINUTES)
-            .setConstraints(
-                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-            )
-            .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "dm_check",
-            ExistingPeriodicWorkPolicy.KEEP,
-            request
-        )
+    private fun startPollingService() {
+        val intent = Intent(this, PollingService::class.java)
+        Log.d("MainActivity", "Starting PollingService")
+        ContextCompat.startForegroundService(this, intent)
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID, "Instagram DMs", NotificationManager.IMPORTANCE_HIGH
-            ).apply { description = "New direct messages" }
-            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-                .createNotificationChannel(channel)
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "Instagram DMs", NotificationManager.IMPORTANCE_HIGH)
+                    .apply { description = "New direct messages" }
+            )
+            nm.createNotificationChannel(
+                NotificationChannel(SERVICE_CHANNEL_ID, "Background service", NotificationManager.IMPORTANCE_MIN)
+                    .apply {
+                        description = "Silent service indicator"
+                        setShowBadge(false)
+                    }
+            )
         }
     }
 
@@ -241,6 +237,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val INBOX_URL = "https://www.instagram.com/direct/inbox/"
         private const val CHANNEL_ID = "dm_channel"
+        private const val SERVICE_CHANNEL_ID = "service_channel"
         private const val MOBILE_USER_AGENT =
             "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Mobile Safari/537.36"
     }
