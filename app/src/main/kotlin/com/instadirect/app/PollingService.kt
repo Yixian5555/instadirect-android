@@ -23,11 +23,14 @@ import java.net.URL
 class PollingService : Service() {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var pollingJob: kotlinx.coroutines.Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "Service started")
+        Log.d(TAG, "onStartCommand (pollingJob active=${pollingJob?.isActive})")
         startForeground(FOREGROUND_NOTIF_ID, buildForegroundNotification())
-        scope.launch { pollLoop() }
+        if (pollingJob?.isActive != true) {
+            pollingJob = scope.launch { pollLoop() }
+        }
         return START_STICKY
     }
 
@@ -74,6 +77,11 @@ class PollingService : Service() {
 
             val code = conn.responseCode
             Log.d(TAG, "HTTP $code")
+            if (code == 401 || code == 403) {
+                Log.w(TAG, "Session expired ($code), notifying user to reopen app")
+                showSessionExpiredNotification()
+                return
+            }
             if (code != 200) {
                 val error = runCatching { conn.errorStream?.bufferedReader()?.readText() }.getOrNull()
                 Log.w(TAG, "Non-200 response ($code): ${error?.take(300)}")
@@ -128,6 +136,31 @@ class PollingService : Service() {
         }
     }
 
+    private fun showSessionExpiredNotification() {
+        val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val lastShown = prefs.getLong(KEY_LAST_AUTH_NOTIF, 0L)
+        if (System.currentTimeMillis() - lastShown < 6 * 60 * 60_000L) return // once per 6h max
+        prefs.edit().putLong(KEY_LAST_AUTH_NOTIF, System.currentTimeMillis()).apply()
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pending = PendingIntent.getActivity(
+            this, 2, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("InstaMsg: Session expired")
+            .setContentText("Tap to reopen the app and refresh your login")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pending)
+            .build()
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(SESSION_NOTIF_ID, notification)
+    }
+
     private fun buildForegroundNotification() = NotificationCompat.Builder(this, SERVICE_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_dialog_info)
         .setContentTitle("InstaMsg")
@@ -171,6 +204,8 @@ class PollingService : Service() {
         private const val POLL_MS = 5 * 60_000L
         private const val FOREGROUND_NOTIF_ID = 1000
         private const val DM_NOTIF_ID = 1001
+        private const val SESSION_NOTIF_ID = 1002
+        const val KEY_LAST_AUTH_NOTIF = "last_auth_notif"
         const val CHANNEL_ID = "dm_channel"
         const val SERVICE_CHANNEL_ID = "service_channel"
         const val PREFS = "instamsg"

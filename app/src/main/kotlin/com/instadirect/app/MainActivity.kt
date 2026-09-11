@@ -25,7 +25,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import android.content.Intent
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
+import android.webkit.RenderProcessGoneDetail
 
 class MainActivity : AppCompatActivity() {
 
@@ -47,6 +50,7 @@ class MainActivity : AppCompatActivity() {
 
         createNotificationChannel()
         requestNotificationPermission()
+        requestBatteryOptimizationExemption()
         startPollingService()
 
         webView = findViewById(R.id.webView)
@@ -121,6 +125,13 @@ class MainActivity : AppCompatActivity() {
                     view.post { view.loadUrl(INBOX_URL) }
                 }
             }
+
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                Log.w(TAG, "WebView renderer gone (crashed=${detail.didCrash()}), recovering")
+                view.destroy()
+                if (!isFinishing && !isDestroyed) recreate()
+                return true
+            }
         }
     }
 
@@ -189,6 +200,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                runCatching {
+                    startActivity(
+                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                            .setData(Uri.parse("package:$packageName"))
+                    )
+                }
+            }
+        }
+    }
+
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
@@ -213,7 +238,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        webView.destroy()
+        runCatching { webView.destroy() }
         super.onDestroy()
     }
 
@@ -235,6 +260,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val TAG = "MainActivity"
         private const val INBOX_URL = "https://www.instagram.com/direct/inbox/"
         private const val CHANNEL_ID = "dm_channel"
         private const val SERVICE_CHANNEL_ID = "service_channel"
