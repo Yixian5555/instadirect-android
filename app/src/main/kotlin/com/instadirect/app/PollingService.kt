@@ -168,7 +168,7 @@ class PollingService : Service() {
 
     companion object {
         private const val TAG = "PollingService"
-        private const val POLL_MS = 60_000L
+        private const val POLL_MS = 5 * 60_000L
         private const val FOREGROUND_NOTIF_ID = 1000
         private const val DM_NOTIF_ID = 1001
         const val CHANNEL_ID = "dm_channel"
